@@ -1,0 +1,17 @@
+# Requires user-workload monitoring enabled:
+#   oc -n openshift-monitoring edit cm cluster-monitoring-config  ->  enableUserWorkload: true
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: vector
+  namespace: vector
+  labels:
+    app.kubernetes.io/name: vector
+spec:
+  selector:
+    matchExpressions:
+      - { key: app.kubernetes.io/name, operator: In, values: [vector] }
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics

@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vector
+  labels:
+    app.kubernetes.io/part-of: vector
+    # Do NOT set openshift.io/cluster-monitoring=true here; that is reserved for
+    # platform namespaces. User-workload monitoring scrapes this namespace by default.

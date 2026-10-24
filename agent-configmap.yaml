@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vector-agent-config
+  namespace: vector
+  labels:
+    app.kubernetes.io/name: vector
+    app.kubernetes.io/component: agent
+data:
+  vector.yaml: |
+    data_dir: /vector-data-dir
+
+    api:
+      enabled: true
+      address: 127.0.0.1:8686
+
+    sources:
+      k8s_logs:
+        type: kubernetes_logs
+        # Cap per-line size; protects memory from runaway log lines.
+        max_line_bytes: 1048576
+        # Skip noisy platform namespaces; remove to collect everything.
+        # Uses pod-level annotation opt-out: vector.dev/exclude: "true"
+        glob_minimum_cooldown_ms: 5000
+
+      host_metrics:
+        type: host_metrics
+        scrape_interval_secs: 30
+        collectors: [cpu, memory, filesystem, network, load]
+        filesystem:
+          mountpoints:
+            excludes: ["/var/lib/containers/*", "/run/*", "/sys/*"]
+
+      internal_metrics:
+        type: internal_metrics
+        scrape_interval_secs: 15
+
+    transforms:
+      drop_noise:
+        type: filter
+        inputs: [k8s_logs]
+        condition: |
+          ns = string(.kubernetes.pod_namespace) ?? ""
+          !(starts_with(ns, "openshift-monitoring") || starts_with(ns, "openshift-marketplace"))
+
+      enrich:
+        type: remap
+        inputs: [drop_noise]
+        source: |
+          .cluster = get_env_var("CLUSTER_NAME") ?? "unknown"
+          .node = get_env_var("VECTOR_SELF_NODE_NAME") ?? "unknown"
+          # Best-effort JSON parse of application logs
+          if is_string(.message) {
+            parsed, err = parse_json(.message)
+            if err == null && is_object(parsed) {
+              . = merge!(., parsed)
+            }
+          }
+          .level = downcase(string(.level) ?? string(.severity) ?? "info")
+          del(.source_type)
+
+    sinks:
+      to_aggregator_logs:
+        type: vector
+        inputs: [enrich]
+        address: vector-aggregator.vector.svc:6000
+        compression: true
+        buffer:
+          type: disk
+          max_size: 1073741824   # 1 GiB, on hostPath
+          when_full: block
+        acknowledgements:
+          enabled: true
+
+      to_aggregator_metrics:
+        type: vector
+        inputs: [host_metrics]
+        address: vector-aggregator.vector.svc:6000
+        compression: true
+
+      prometheus_self:
+        type: prometheus_exporter
+        inputs: [internal_metrics]
+        address: 0.0.0.0:9598

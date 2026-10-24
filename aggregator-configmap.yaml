@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vector-aggregator-config
+  namespace: vector
+  labels:
+    app.kubernetes.io/name: vector
+    app.kubernetes.io/component: aggregator
+data:
+  vector.yaml: |
+    data_dir: /vector-data-dir
+
+    api:
+      enabled: true
+      address: 0.0.0.0:8686
+
+    sources:
+      from_agents:
+        type: vector
+        address: 0.0.0.0:6000
+        version: "2"
+
+      internal_metrics:
+        type: internal_metrics
+        scrape_interval_secs: 15
+
+    transforms:
+      route_by_type:
+        type: route
+        inputs: [from_agents]
+        route:
+          audit_like: 'exists(.kubernetes.pod_namespace) && starts_with(string!(.kubernetes.pod_namespace), "openshift-")'
+
+      loki_shape:
+        type: remap
+        inputs: [route_by_type._unmatched, route_by_type.audit_like]
+        source: |
+          # Keep label cardinality low; everything else stays in the log body.
+          .loki_labels = {
+            "cluster": .cluster,
+            "namespace": .kubernetes.pod_namespace,
+            "app": .kubernetes.pod_labels."app.kubernetes.io/name" ?? .kubernetes.pod_labels.app ?? .kubernetes.container_name,
+            "level": .level
+          }
+
+    sinks:
+      loki:
+        type: loki
+        inputs: [loki_shape]
+        endpoint: ${LOKI_URL}
+        encoding:
+          codec: json
+        labels:
+          cluster: "{{ loki_labels.cluster }}"
+          namespace: "{{ loki_labels.namespace }}"
+          app: "{{ loki_labels.app }}"
+          level: "{{ loki_labels.level }}"
+        remove_label_fields: true
+        out_of_order_action: accept
+        # For LokiStack behind the OpenShift gateway use e.g.:
+        #   endpoint: https://logging-loki-gateway-http.openshift-logging.svc:8080/api/logs/v1/application
+        #   auth: { strategy: bearer, token: ${LOKI_TOKEN} }
+        #   tls: { ca_file: /etc/vector/ca/service-ca.crt }
+        buffer:
+          type: disk
+          max_size: 5368709120   # 5 GiB
+          when_full: block
+        batch:
+          max_bytes: 1048576
+          timeout_secs: 2
+        request:
+          retry_attempts: 20
+          concurrency: adaptive
+        acknowledgements:
+          enabled: true
+
+      prometheus_metrics:
+        type: prometheus_exporter
+        inputs: [internal_metrics]
+        address: 0.0.0.0:9598

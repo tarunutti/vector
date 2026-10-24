@@ -1,0 +1,47 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: vector-alerts
+  namespace: vector
+  labels:
+    app.kubernetes.io/name: vector
+spec:
+  groups:
+    - name: vector.rules
+      rules:
+        - alert: VectorComponentErrors
+          expr: sum by (component_id, pod) (rate(vector_component_errors_total[5m])) > 0
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "Vector component {{ $labels.component_id }} is erroring"
+            description: "Pod {{ $labels.pod }} reports component errors for 10m."
+        - alert: VectorEventsDiscarded
+          expr: sum by (component_id) (rate(vector_component_discarded_events_total[5m])) > 0
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "Vector is discarding events in {{ $labels.component_id }}"
+        - alert: VectorBufferNearFull
+          expr: |
+            max by (pod, component_id) (vector_buffer_byte_size)
+              / max by (pod, component_id) (vector_buffer_max_byte_size) > 0.8
+          for: 10m
+          labels: { severity: critical }
+          annotations:
+            summary: "Vector disk buffer >80% on {{ $labels.pod }}/{{ $labels.component_id }}"
+            description: "Backpressure is imminent; the sink is slow or down."
+        - alert: VectorAgentNotRunningEverywhere
+          expr: |
+            kube_daemonset_status_number_ready{namespace="vector",daemonset="vector-agent"}
+              < kube_daemonset_status_desired_number_scheduled{namespace="vector",daemonset="vector-agent"}
+          for: 15m
+          labels: { severity: warning }
+          annotations:
+            summary: "Vector agent is not ready on all nodes"
+        - alert: VectorAggregatorDown
+          expr: absent(up{namespace="vector",service="vector-aggregator"} == 1)
+          for: 5m
+          labels: { severity: critical }
+          annotations:
+            summary: "No healthy Vector aggregator targets"

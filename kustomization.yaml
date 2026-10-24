@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: vector
+resources:
+  - namespace.yaml
+  - serviceaccounts.yaml
+  - scc.yaml
+  - rbac.yaml
+  - agent-configmap.yaml
+  - agent-daemonset.yaml
+  - aggregator-configmap.yaml
+  - aggregator-statefulset.yaml
+  - services.yaml
+  - pdb.yaml
+  - networkpolicy.yaml
+  - servicemonitor.yaml
+  - prometheusrule.yaml

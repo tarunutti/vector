@@ -1,0 +1,39 @@
+# Least-privilege SCC for the log-collecting DaemonSet.
+# Needs: hostPath (/var/log, /var/lib/vector), root read access to pod logs,
+# and an unconfined SELinux type (spc_t) to read container log files.
+# Not privileged, all capabilities dropped, read-only root filesystem.
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: vector-agent
+  annotations:
+    kubernetes.io/description: >-
+      Allows Vector agent to read node pod logs via hostPath. Grants no privileged mode.
+allowHostDirVolumePlugin: true
+allowHostIPC: false
+allowHostNetwork: false
+allowHostPID: false
+allowHostPorts: false
+allowPrivilegeEscalation: false
+allowPrivilegedContainer: false
+allowedCapabilities: []
+defaultAddCapabilities: []
+requiredDropCapabilities: ["ALL"]
+readOnlyRootFilesystem: true
+fsGroup:
+  type: RunAsAny
+runAsUser:
+  type: RunAsAny
+seLinuxContext:
+  type: RunAsAny
+supplementalGroups:
+  type: RunAsAny
+volumes:
+  - configMap
+  - downwardAPI
+  - emptyDir
+  - hostPath
+  - projected
+  - secret
+users: []
+groups: []

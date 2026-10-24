@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: vector-aggregator
+  namespace: vector
+  labels:
+    app.kubernetes.io/name: vector
+    app.kubernetes.io/component: aggregator
+spec:
+  selector:
+    app.kubernetes.io/name: vector
+    app.kubernetes.io/component: aggregator
+  ports:
+    - { name: vector,  port: 6000, targetPort: vector }
+    - { name: metrics, port: 9598, targetPort: metrics }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vector-aggregator-headless
+  namespace: vector
+  labels:
+    app.kubernetes.io/name: vector
+    app.kubernetes.io/component: aggregator
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: vector
+    app.kubernetes.io/component: aggregator
+  ports:
+    - { name: vector, port: 6000, targetPort: vector }
+---
+# Metrics service for the agent DaemonSet (used by the ServiceMonitor)
+apiVersion: v1
+kind: Service
+metadata:
+  name: vector-agent-metrics
+  namespace: vector
+  labels:
+    app.kubernetes.io/name: vector
+    app.kubernetes.io/component: agent
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: vector
+    app.kubernetes.io/component: agent
+  ports:
+    - { name: metrics, port: 9598, targetPort: metrics }

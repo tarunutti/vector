@@ -1,0 +1,50 @@
+# The kubernetes_logs source enriches events with pod/namespace/node metadata.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vector-agent
+  labels:
+    app.kubernetes.io/name: vector
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "namespaces", "nodes"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vector-agent
+  labels:
+    app.kubernetes.io/name: vector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vector-agent
+subjects:
+  - kind: ServiceAccount
+    name: vector-agent
+    namespace: vector
+---
+# Allow the agent SA to use the custom SCC (see scc.yaml)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vector-agent-scc
+rules:
+  - apiGroups: ["security.openshift.io"]
+    resources: ["securitycontextconstraints"]
+    resourceNames: ["vector-agent"]
+    verbs: ["use"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vector-agent-scc
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vector-agent-scc
+subjects:
+  - kind: ServiceAccount
+    name: vector-agent
+    namespace: vector
